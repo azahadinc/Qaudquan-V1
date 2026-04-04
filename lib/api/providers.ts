@@ -1,0 +1,106 @@
+/**
+ * API Clients for Third-Party Services
+ * Placeholder structure for Phase 1 - will be expanded in later phases
+ */
+
+import { APIClient } from './client';
+import { Tick, Candle, Instrument } from '../types';
+
+/**
+ * Polygon.io API Client (Stock & Crypto data)
+ */
+export class PolygonClient extends APIClient {
+  constructor(apiKey: string) {
+    super('https://api.polygon.io');
+    this.setAuthHeader(apiKey);
+  }
+
+  async getLatestQuote(symbol: string): Promise<any> {
+    // TODO: Implement in Phase 2
+    return {};
+  }
+
+  async getHistoricalBars(symbol: string, from: string, to: string): Promise<Candle[]> {
+    // TODO: Implement in Phase 2
+    return [];
+  }
+
+  async searchTickers(query: string): Promise<Instrument[]> {
+    // TODO: Implement in Phase 2
+    return [];
+  }
+}
+
+/**
+ * Binance API Client (Cryptocurrency data)
+ */
+export class BinanceClient extends APIClient {
+  constructor() {
+    super('https://api.binance.com/api');
+  }
+
+  async getPriceData(symbol: string): Promise<Tick> {
+    // TODO: Implement in Phase 2
+    return {} as Tick;
+  }
+
+  async getHistoricalKlines(symbol: string, interval: string, limit: number): Promise<Candle[]> {
+    // TODO: Implement in Phase 2
+    return [];
+  }
+}
+
+/**
+ * OANDA API Client (Forex data)
+ */
+export class OandaClient extends APIClient {
+  constructor(apiKey: string) {
+    super('https://api-fxpractice.oanda.com/v3');
+    this.setAuthHeader(apiKey);
+  }
+
+  async getInstrumentData(symbol: string): Promise<Tick> {
+    // TODO: Implement in Phase 2
+    return {} as Tick;
+  }
+
+  async getCandles(symbol: string, granularity: string, count: number): Promise<Candle[]> {
+    // TODO: Implement in Phase 2
+    return [];
+  }
+}
+
+/**
+ * Alpha Vantage API Client (Stock data)
+ */
+export class AlphaVantageClient extends APIClient {
+  constructor(apiKey: string) {
+    super('https://www.alphavantage.co/query');
+    this.setAuthHeader(apiKey);
+  }
+
+  async getQuoteData(symbol: string): Promise<Tick> {
+    // TODO: Implement in Phase 2
+    return {} as Tick;
+  }
+}
+
+/**
+ * Finnhub API Client (Financial data)
+ */
+export class FinnhubClient extends APIClient {
+  constructor(apiKey: string) {
+    super('https://finnhub.io/api/v1');
+    this.setAuthHeader(apiKey);
+  }
+
+  async getCompanyProfile(symbol: string): Promise<Instrument> {
+    // TODO: Implement in Phase 2
+    return {} as Instrument;
+  }
+
+  async getMarketNews(category?: string): Promise<any> {
+    // TODO: Implement in Phase 2
+    return [];
+  }
+}

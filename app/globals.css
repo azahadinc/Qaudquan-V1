@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Variables for design tokens */
+:root {
+  --sidebar-width: 200px;
+  --transition-fast: 150ms;
+  --transition-base: 200ms;
+  --transition-slow: 300ms;
+}
+
+/* Smooth transitions */
+* {
+  @apply transition-colors duration-200;
+}
+
+html,
+body {
+  @apply h-full w-full bg-white text-neutral-900;
+}
+
+/* Remove scrollbar but keep functionality */
+::-webkit-scrollbar {
+  @apply w-2 h-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-300 rounded-full hover:bg-neutral-400;
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-primary-500;
+}
+
+button:focus-visible,
+a:focus-visible {
+  @apply outline-2 outline-offset-2 outline-primary-500;
+}
+
+/* Accessibility: Prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    @apply !transition-none !duration-0;
+  }
+}
+
+/* Chart container styles */
+.chart-container {
+  @apply relative w-full h-full;
+}
+
+.chart-container > div {
+  @apply w-full h-full;
+}
+
+/* Number animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-base) ease-in;
+}
+
+/* Price ticker styles */
+.price-up {
+  @apply text-up-600 font-semibold;
+}
+
+.price-down {
+  @apply text-down-600 font-semibold;
+}
+
+.price-neutral {
+  @apply text-neutral-700 font-semibold;
+}
+
+/* Data table styles */
+.table-striped tbody tr:nth-child(odd) {
+  @apply bg-neutral-50;
+}
+
+.table-striped tbody tr:hover {
+  @apply bg-neutral-100;
+}
+
+/* Skeleton loading */
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.skeleton {
+  @apply bg-gradient-to-r from-neutral-200 via-neutral-100 to-neutral-200;
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}

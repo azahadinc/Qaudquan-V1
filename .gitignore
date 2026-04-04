@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+/.npm
+/.eslintcache
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+coverage/
+.nyc_output/
+
+# Next.js
+/.next/
+/out/
+/dist/
+
+# Build
+.build/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-workspace
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# E2E test reports
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
