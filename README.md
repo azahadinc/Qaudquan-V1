@@ -203,22 +203,22 @@ Test files in `/e2e` directory
 ## Phases Overview
 
 1. **Phase 1**: ✅ Foundation & Architecture
-2. **Phase 2**: Dashboard Module (next)
-3. **Phase 3**: Screener Module
-4. **Phase 4**: Charts & Technical Analysis
-5. **Phase 5**: Heat Map Module
-6. **Phase 6**: Signals Module
-7. **Phase 7**: Portfolio Module
-8. **Phase 8**: Live Data Integration
+2. **Phase 2**: ✅ Dashboard Module
+3. **Phase 3**: ✅ Screener Module
+4. **Phase 4**: ✅ Charts & Technical Analysis
+5. **Phase 5**: ✅ Heat Map Module
+6. **Phase 6**: ✅ Signals Module
+7. **Phase 7**: ✅ Portfolio Module
+8. **Phase 8**: Live Data Integration (next)
 9. **Phases 9-14**: Advanced Features
 
 ## Next Steps
 
-Phase 2 will build the full dashboard with:
-- PageShell layout engine
-- Metric cards with animated transitions
-- Watchlist with virtualization
-- Performance chart with Lightweight Charts
-- Market breadth and sector rotation panels
+Phase 8 will connect real market data APIs and replace mock data with live streams:
+- Equities via Polygon.io / Alpha Vantage
+- Crypto via Binance WebSocket / CoinGecko
+- Forex via OANDA / Frankfurter
+- Commodities via a market feed
+- Add REST polling, WebSocket management, and normalized internal data schemas
 
 See `implementation.md` for detailed specifications.

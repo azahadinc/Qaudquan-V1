@@ -993,6 +993,247 @@ Sharpe ratio, portfolio beta, and maximum drawdown are computed on a nightly sch
 
 The donut chart and allocation bar read directly from the live position store. As prices move, allocation percentages shift in real time. A position that grows significantly starts to create concentration risk — the allocation bar visually communicates this by shifting proportions.
 
+Three diagrams for Phase 7 — the structural overview, the P&L reactive computation flow, and the build sequence.Now the P&L reactive computation flow — exactly how a live tick triggers a cascade of derived value updates across the entire portfolio module without redundant re-renders.Now the build sequence — the exact order for Phase 7 with no blocking dependencies.Click any node to drill into that specific step. Here's the full layer breakdown:
+
+---
+
+## Layer 7.1 — PortfolioStore + TypeScript interfaces
+
+This is the foundation everything else computes from. Define the canonical types first before any component code:
+
+```typescript
+interface Position {
+  id: string
+  symbol: string
+  market: 'equity' | 'crypto' | 'forex' | 'commodity'
+  quantity: number
+  avgCost: number
+  openedAt: number
+  currency: string
+}
+
+interface Trade {
+  id: string
+  symbol: string
+  side: 'buy' | 'sell'
+  quantity: number
+  price: number
+  executedAt: number
+  fee: number
+}
+
+interface PortfolioState {
+  positions: Position[]
+  tradeHistory: Trade[]
+  cashBalance: number
+  addPosition: (position: Omit<Position, 'id'>) => void
+  updatePosition: (id: string, partial: Partial<Position>) => void
+  closePosition: (id: string, price: number) => void
+  addTrade: (trade: Omit<Trade, 'id'>) => void
+}
+```
+
+The `closePosition` action calculates the realised P&L, removes the position from `positions[]`, and appends a trade record to `tradeHistory[]`. The store never computes derived metrics — it only holds raw position state. All derived values live in the hook.
+
+---
+
+## Layer 7.2 — usePortfolio hook
+
+The most important piece of Phase 7. It reads both the `PortfolioStore` and the `TickStore`, and returns a memoised object of all derived portfolio metrics. The critical performance pattern is the Zustand selector — it only subscribes to tick updates for symbols that are currently held:
+
+```typescript
+function usePortfolio() {
+  const { positions, cashBalance } = usePortfolioStore()
+  const heldSymbols = useMemo(() => positions.map(p => p.symbol), [positions])
+
+  const ticks = useTickStore(
+    useCallback(
+      state => Object.fromEntries(heldSymbols.map(s => [s, state.ticks[s]])),
+      [heldSymbols]
+    )
+  )
+
+  return useMemo(() => {
+    const enriched = positions.map(pos => {
+      const currentPrice = ticks[pos.symbol]?.price ?? pos.avgCost
+      const marketValue = currentPrice * pos.quantity
+      const unrealisedPnL = (currentPrice - pos.avgCost) * pos.quantity
+      const unrealisedPct = (currentPrice / pos.avgCost - 1) * 100
+      return { ...pos, currentPrice, marketValue, unrealisedPnL, unrealisedPct }
+    })
+
+    const totalMarketValue = enriched.reduce((s, p) => s + p.marketValue, 0)
+    const totalValue = totalMarketValue + cashBalance
+    const totalUnrealised = enriched.reduce((s, p) => s + p.unrealisedPnL, 0)
+    const totalCost = positions.reduce((s, p) => s + p.avgCost * p.quantity, 0)
+
+    const allocation = enriched.map(p => ({
+      ...p,
+      weight: totalValue > 0 ? (p.marketValue / totalValue) * 100 : 0
+    }))
+
+    const byMarket = ['equity','crypto','forex','commodity'].map(m => ({
+      market: m,
+      pct: allocation.filter(p => p.market === m).reduce((s, p) => s + p.weight, 0)
+    }))
+
+    return { positions: allocation, totalValue, totalCost, totalUnrealised, byMarket }
+  }, [positions, ticks, cashBalance])
+}
+```
+
+The `useMemo` dependency array means the entire computation only reruns when positions change or a held symbol's tick updates — never on unrelated market data.
+
+---
+
+## Layer 7.3a — P&L utility functions
+
+Pure functions — no hooks, no side effects, fully testable:
+
+```typescript
+// All inputs are numbers. No store reads inside these functions.
+
+export function unrealisedPnL(currentPrice: number, avgCost: number, qty: number) {
+  return (currentPrice - avgCost) * qty
+}
+
+export function unrealisedPct(currentPrice: number, avgCost: number) {
+  return (currentPrice / avgCost - 1) * 100
+}
+
+export function realisedPnL(trades: Trade[]): number {
+  return trades
+    .filter(t => t.side === 'sell')
+    .reduce((sum, t) => sum + ((t.price - getAvgCost(t.symbol, trades)) * t.quantity) - t.fee, 0)
+}
+
+export function dayDelta(currentValue: number, prevCloseValue: number) {
+  return { absolute: currentValue - prevCloseValue, pct: (currentValue / prevCloseValue - 1) * 100 }
+}
+```
+
+Each function has a corresponding unit test. If the P&L math is wrong, you know immediately and you know exactly which function to fix.
+
+---
+
+## Layer 7.3b — Risk metrics API route
+
+Sharpe ratio, portfolio beta, and maximum drawdown require 30–90 days of daily return data. Computing these in the browser on every tick would be wasteful and misleading — they're statistical measures that should only change once per day. A Vercel Cron Job fires `GET /api/portfolio/risk` at market close each trading day:
+
+```typescript
+// Sharpe ratio: (meanReturn - riskFreeRate) / stdDevReturn
+function sharpeRatio(returns: number[], riskFreeRate = 0.05 / 252): number {
+  const mean = returns.reduce((s, r) => s + r, 0) / returns.length
+  const variance = returns.reduce((s, r) => s + (r - mean) ** 2, 0) / returns.length
+  return (mean - riskFreeRate) / Math.sqrt(variance)
+}
+
+// Beta: cov(portfolio, benchmark) / var(benchmark)
+function portfolioBeta(portfolioReturns: number[], benchmarkReturns: number[]): number {
+  const cov = covariance(portfolioReturns, benchmarkReturns)
+  const varBench = variance(benchmarkReturns)
+  return cov / varBench
+}
+
+// Max drawdown: largest peak-to-trough decline
+function maxDrawdown(values: number[]): number {
+  let peak = values[0], maxDD = 0
+  for (const v of values) {
+    if (v > peak) peak = v
+    const dd = (peak - v) / peak
+    if (dd > maxDD) maxDD = dd
+  }
+  return maxDD
+}
+```
+
+Results are stored in the user's account row and served from the database — the client never computes these, it only fetches them once per day via React Query with `staleTime: 23 * 60 * 60 * 1000`.
+
+---
+
+## Layer 7.4 — KPI cards
+
+The four cards (total value, invested, unrealised P&L, beta) read from `usePortfolio()` and the risk metrics query. Total value and unrealised P&L use `useNumberTransition` from Phase 2 to animate changes. Beta is static until the daily refresh. Each card has a trend arrow that flips direction when P&L crosses zero — implemented as a CSS class toggled by the sign of the value.
+
+---
+
+## Layer 7.5a — HoldingsTable
+
+Built on TanStack Table, same pattern as the Screener in Phase 3. Each row renders a `HoldingRow` component that calls `useTick(symbol)` internally — so only the row for a symbol whose price just changed re-renders. The P&L column uses a custom cell renderer that formats the value, applies green/red colour, and shows both absolute and percentage values.
+
+Column definition for the P&L column:
+
+```typescript
+{
+  accessorKey: 'unrealisedPnL',
+  header: 'P&L',
+  cell: ({ row }) => {
+    const { unrealisedPnL, unrealisedPct } = row.original
+    const isUp = unrealisedPnL >= 0
+    return (
+      <span style={{ color: isUp ? 'var(--c-up)' : 'var(--c-down)' }}>
+        {isUp ? '+' : ''}{formatCurrency(unrealisedPnL)}
+        <span style={{ fontSize: 11, marginLeft: 4 }}>
+          ({isUp ? '+' : ''}{unrealisedPct.toFixed(2)}%)
+        </span>
+      </span>
+    )
+  },
+  sortingFn: 'basic'
+}
+```
+
+---
+
+## Layer 7.5b — Allocation visuals
+
+The donut chart and allocation bar both read from `usePortfolio().byMarket`. When the underlying position values shift due to price changes, the allocation percentages recompute inside `usePortfolio`'s `useMemo`, and the charts get new data via their props — React handles the re-render automatically.
+
+The allocation bar is a flex row where each segment's `flex` value is set to the market's percentage. CSS `transition: flex 0.4s ease` makes the segments animate smoothly as weights shift across a trading day.
+
+---
+
+## Layer 7.6 — AI optimiser integration point
+
+This step is a placeholder built in Phase 7 and powered up in Phase 13. The button serializes the current portfolio state — positions, weights, P&L, risk metrics — and sends it to the Anthropic API with a system prompt that instructs Claude to act as a portfolio risk advisor. The response streams into a slide-out drawer component. The context sent includes:
+
+```typescript
+const portfolioContext = {
+  totalValue,
+  totalUnrealised,
+  sharpe: riskMetrics.sharpe,
+  beta: riskMetrics.beta,
+  maxDrawdown: riskMetrics.maxDrawdown,
+  positions: positions.map(p => ({
+    symbol: p.symbol, market: p.market,
+    weight: p.weight, unrealisedPct: p.unrealisedPct
+  }))
+}
+```
+
+---
+
+## Files created in Phase 7
+
+```
+/store/portfolioStore.ts
+/hooks/usePortfolio.ts
+/lib/portfolio/pnl.ts
+/lib/portfolio/riskMetrics.ts
+/lib/portfolio/allocation.ts
+/components/modules/portfolio/KPICards.tsx
+/components/modules/portfolio/HoldingsTable.tsx
+/components/modules/portfolio/HoldingRow.tsx
+/components/modules/portfolio/AllocationDonut.tsx
+/components/modules/portfolio/AllocationBar.tsx
+/components/modules/portfolio/AIOptimiserDrawer.tsx
+/app/api/portfolio/risk/route.ts
+/app/api/portfolio/positions/route.ts
+/app/api/portfolio/trades/route.ts
+```
+
+---
+
 ---
 
 ## Phase 8 — Live Data Integration

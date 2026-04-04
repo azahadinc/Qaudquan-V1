@@ -16,16 +16,21 @@ export class PolygonClient extends APIClient {
   }
 
   async getLatestQuote(_symbol: string): Promise<any> {
+    void _symbol;
     // TODO: Implement in Phase 2
     return {};
   }
 
   async getHistoricalBars(_symbol: string, _from: string, _to: string): Promise<Candle[]> {
+    void _symbol;
+    void _from;
+    void _to;
     // TODO: Implement in Phase 2
     return [];
   }
 
   async searchTickers(query: string): Promise<Instrument[]> {
+    void query;
     // TODO: Implement in Phase 2
     return [];
   }
@@ -40,11 +45,15 @@ export class BinanceClient extends APIClient {
   }
 
   async getPriceData(symbol: string): Promise<Tick> {
+    void symbol;
     // TODO: Implement in Phase 2
     return {} as Tick;
   }
 
   async getHistoricalKlines(symbol: string, interval: string, limit: number): Promise<Candle[]> {
+    void symbol;
+    void interval;
+    void limit;
     // TODO: Implement in Phase 2
     return [];
   }
@@ -60,11 +69,15 @@ export class OandaClient extends APIClient {
   }
 
   async getInstrumentData(symbol: string): Promise<Tick> {
+    void symbol;
     // TODO: Implement in Phase 2
     return {} as Tick;
   }
 
   async getCandles(symbol: string, granularity: string, count: number): Promise<Candle[]> {
+    void symbol;
+    void granularity;
+    void count;
     // TODO: Implement in Phase 2
     return [];
   }
@@ -80,6 +93,7 @@ export class AlphaVantageClient extends APIClient {
   }
 
   async getQuoteData(symbol: string): Promise<Tick> {
+    void symbol;
     // TODO: Implement in Phase 2
     return {} as Tick;
   }
@@ -95,11 +109,13 @@ export class FinnhubClient extends APIClient {
   }
 
   async getCompanyProfile(symbol: string): Promise<Instrument> {
+    void symbol;
     // TODO: Implement in Phase 2
     return {} as Instrument;
   }
 
   async getMarketNews(category?: string): Promise<any> {
+    void category;
     // TODO: Implement in Phase 2
     return [];
   }
