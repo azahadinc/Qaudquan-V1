@@ -14,7 +14,7 @@ interface WatchlistItem {
   sparkline: number[];
 }
 
-interface WatchlistProps {
+export interface WatchlistProps {
   items: WatchlistItem[];
   onRemove?: (symbol: string) => void;
 }

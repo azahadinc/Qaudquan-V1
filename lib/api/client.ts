@@ -3,7 +3,7 @@
  * Shared HTTP client for all API calls
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 
 export class APIClient {
   private instance: AxiosInstance;
@@ -61,7 +61,7 @@ export class APIClient {
    * Add interceptor
    */
   addInterceptor(
-    onRequest?: (config: AxiosRequestConfig) => AxiosRequestConfig,
+    onRequest?: (config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig,
     onError?: (error: any) => Promise<any>
   ) {
     this.instance.interceptors.request.use(onRequest);

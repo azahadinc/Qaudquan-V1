@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { tokens } from '@/config/tokens';
 
-interface SectorRotationProps {
+export interface SectorRotationProps {
   sectors: Array<{
     name: string;
     changePct: number;

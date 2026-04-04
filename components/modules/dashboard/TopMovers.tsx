@@ -12,7 +12,7 @@ interface Mover {
   price: number;
 }
 
-interface TopMoversProps {
+export interface TopMoversProps {
   gainers: Mover[];
   losers: Mover[];
 }

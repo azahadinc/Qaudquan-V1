@@ -15,12 +15,12 @@ export class PolygonClient extends APIClient {
     this.setAuthHeader(apiKey);
   }
 
-  async getLatestQuote(symbol: string): Promise<any> {
+  async getLatestQuote(_symbol: string): Promise<any> {
     // TODO: Implement in Phase 2
     return {};
   }
 
-  async getHistoricalBars(symbol: string, from: string, to: string): Promise<Candle[]> {
+  async getHistoricalBars(_symbol: string, _from: string, _to: string): Promise<Candle[]> {
     // TODO: Implement in Phase 2
     return [];
   }

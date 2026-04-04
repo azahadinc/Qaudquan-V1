@@ -4,7 +4,7 @@ import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { tokens } from '@/config/tokens';
 
-interface MarketBreadthProps {
+export interface MarketBreadthProps {
   advancing: number;
   declining: number;
   unchanged: number;
