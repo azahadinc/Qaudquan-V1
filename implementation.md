@@ -712,6 +712,235 @@ The color mapping is a linear interpolation between the full-red and full-green 
 
 In a real S&P 500 heatmap, cell size is typically proportional to market cap — AAPL's cell is larger than a small-cap stock. Implement this using a treemap layout algorithm (`d3-treemap` from the D3 library). Feed it the symbol list with market cap as the value, and it computes `x, y, width, height` for each cell. Render cells as absolutely positioned `<div>` elements inside a relative container.
 
+Now Phase 6 — the Signals module. This one has its own detection engine running server-side, so the architecture splits into two clear halves.Now the build sequences for both phases side by side.Here is the full written breakdown for both phases.
+
+---
+
+## Phase 5 — Heat Map Module
+
+### Layer 5.1 — HeatmapStore
+
+The store holds a flat array of snapshot objects — one per symbol — plus the active market and color mode selections. It never holds tick history, only the latest batch snapshot. This is a deliberate design decision: the heatmap is a spatial summary, not a live price ticker. Tick-by-tick updates would cause constant cell repaints that distract more than they inform.
+
+```typescript
+interface HeatmapSymbol {
+  symbol: string
+  name: string
+  changePct: number
+  volumeRatio: number
+  rsi: number
+  marketCap: number
+  market: Market
+}
+
+interface HeatmapState {
+  symbols: HeatmapSymbol[]
+  activeMarket: 'sp500' | 'crypto' | 'forex' | 'commodities'
+  colorMode: 'changePct' | 'volume' | 'rsi'
+  setSymbols: (symbols: HeatmapSymbol[]) => void
+  setMarket: (market: string) => void
+  setColorMode: (mode: string) => void
+}
+```
+
+### Layer 5.2 — Snapshot worker
+
+A `setInterval` at 10 seconds fires a single batch request to `/api/heatmap?market=sp500`. The API route reads pre-computed metrics from Redis for all symbols in the requested universe and returns them as a flat array. The client writes the entire array into the store in one atomic update — no partial updates, no flickering individual cells.
+
+The 10-second interval is deliberately slower than the watchlist's tick subscriptions. The heatmap is a macro view — a cell changing color every 100ms communicates nothing useful and costs attention.
+
+### Layer 5.3 — Treemap layout (d3)
+
+`d3-treemap` takes a hierarchy of values and computes `x0, y0, x1, y1` for each leaf. Feed it the symbol list with `marketCap` as the value and it tiles them proportionally — AAPL gets a larger cell than a small-cap stock.
+
+```typescript
+const root = d3.hierarchy({ children: symbols })
+  .sum(d => d.marketCap)
+
+d3.treemap()
+  .size([containerWidth, containerHeight])
+  .padding(2)
+  (root)
+
+// Each leaf now has: leaf.x0, leaf.y0, leaf.x1, leaf.y1
+```
+
+This runs inside a `useMemo` that only recalculates when the symbol list changes or the container resizes (tracked via `ResizeObserver`). Cells are rendered as absolutely positioned `<div>` elements inside a `position: relative` container using the treemap coordinates directly.
+
+### Layer 5.4 — Color interpolation
+
+Color is computed per symbol in a `useMemo` over the entire symbol array. The scale maps `changePct` from `[-5, 5]` to a red-to-green range:
+
+```typescript
+function changePctToColor(pct: number): string {
+  const clamped = Math.max(-5, Math.min(5, pct))
+  const ratio = (clamped + 5) / 10  // 0 = full red, 0.5 = neutral, 1 = full green
+  const r = Math.round(216 + (26 - 216) * ratio)
+  const g = Math.round(64 + (158 - 64) * ratio)
+  const b = Math.round(64 + (64 - 64) * ratio)
+  return `rgb(${r},${g},${b})`
+}
+```
+
+When `colorMode` is `volume` or `rsi`, the same interpolation runs but maps different fields. The `colorMode` selector is the only thing that changes which field drives the color — the interpolation math stays identical. This keeps the color computation as a single, testable pure function.
+
+### Layer 5.5 — HeatmapGrid renderer
+
+Each cell is an absolutely positioned `<div>` styled from treemap coordinates. The cell contains the ticker symbol and percentage change label. Font size scales with cell width — a large cap gets readable text, a small cap gets a smaller font or hides the label entirely below a minimum width threshold.
+
+```tsx
+{root.leaves().map(leaf => (
+  <div
+    key={leaf.data.symbol}
+    style={{
+      position: 'absolute',
+      left: leaf.x0, top: leaf.y0,
+      width: leaf.x1 - leaf.x0,
+      height: leaf.y1 - leaf.y0,
+      background: changePctToColor(leaf.data.changePct),
+      borderRadius: 4,
+    }}
+    title={`${leaf.data.name}: ${leaf.data.changePct.toFixed(2)}%`}
+  >
+    {(leaf.x1 - leaf.x0) > 40 && <span>{leaf.data.symbol}</span>}
+    {(leaf.x1 - leaf.x0) > 60 && <span>{leaf.data.changePct.toFixed(1)}%</span>}
+  </div>
+))}
+```
+
+### Layer 5.6 — Sector chart + market switcher
+
+The sector performance bar chart sits below the main heatmap grid. It uses Chart.js horizontal bar, where each bar represents a sector's aggregate change percentage. Colors map to the same red/green scale as the heatmap cells. The market switcher (S&P 500, Crypto, Forex, Commodities) writes to the `HeatmapStore`, which triggers the snapshot worker to re-fetch for the new universe and recalculates the treemap layout.
+
+---
+
+## Phase 6 — Signals Module
+
+### Layer 6.1 — Signal rules engine
+
+Every signal is defined as a `SignalRule` object in a flat array. The rule has three parts: a name, a type (`buy` | `sell` | `neutral`), a `condition` function that returns a boolean, and a `confidence` function that returns 0–100.
+
+```typescript
+interface SignalRule {
+  name: string
+  type: 'buy' | 'sell' | 'neutral'
+  condition: (ind: Indicators) => boolean
+  confidence: (ind: Indicators) => number
+}
+
+const rules: SignalRule[] = [
+  {
+    name: 'Golden Cross',
+    type: 'buy',
+    condition: (ind) => ind.sma50 > ind.sma200 && ind.prevSma50 <= ind.prevSma200,
+    confidence: (ind) => {
+      let score = 60
+      if (ind.volumeRatio > 1.5) score += 15
+      if (ind.rsi > 50 && ind.rsi < 70) score += 15
+      if (ind.adx > 25) score += 10
+      return Math.min(score, 100)
+    }
+  },
+  {
+    name: 'RSI Divergence',
+    type: 'buy',
+    condition: (ind) => ind.priceTrend === 'down' && ind.rsiTrend === 'up',
+    confidence: (ind) => ind.rsi < 40 ? 80 : 55
+  },
+  // ... more rules
+]
+```
+
+Adding a new signal type is one object in this array. The detection loop never changes.
+
+### Layer 6.2 — Confidence scorer
+
+The confidence scorer takes all fired rules for a symbol and combines them into a single composite score. Rules that agree amplify each other; conflicting rules (a buy signal and a sell signal firing simultaneously) suppress the final score:
+
+```typescript
+function compositeConfidence(firedRules: SignalRule[], ind: Indicators): number {
+  const scores = firedRules.map(r => r.confidence(ind))
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+  const hasConflict = firedRules.some(r => r.type === 'buy') &&
+                      firedRules.some(r => r.type === 'sell')
+  return hasConflict ? avg * 0.6 : avg
+}
+```
+
+### Layer 6.3 — Detection cron + API route
+
+A Vercel Cron Job fires `GET /api/signals/detect` every minute. The route reads indicator values for all tracked symbols from Redis, runs every rule's `condition` function against each symbol's indicators, scores the fired rules, and upserts results to the `signals` database table.
+
+The upsert key is `(symbol, ruleName)` — so if a Golden Cross is already active on AAPL, it gets its confidence score updated rather than creating a duplicate row. Each signal gets an `expiresAt` timestamp 24 hours in the future, and a nightly cleanup job purges expired rows.
+
+### Layer 6.4 — useSignals hook
+
+React Query polls `GET /api/signals` every 30 seconds. The API route returns all non-expired signals sorted by confidence descending. The hook exposes the raw array plus derived metrics:
+
+```typescript
+function useSignals() {
+  const query = useQuery({
+    queryKey: ['signals'],
+    queryFn: () => fetch('/api/signals').then(r => r.json()),
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+  })
+
+  const signals = query.data ?? []
+  return {
+    signals,
+    buyCount: signals.filter(s => s.type === 'buy').length,
+    sellCount: signals.filter(s => s.type === 'sell').length,
+    avgConfidence: signals.length
+      ? Math.round(signals.reduce((a, s) => a + s.confidence, 0) / signals.length)
+      : 0,
+    isLoading: query.isLoading,
+  }
+}
+```
+
+### Layer 6.5 — SignalFeed component
+
+The feed renders the signals array as a vertical list. New signals that appear between polls fade in with a CSS `@keyframes` opacity transition. Each row shows the signal icon (up/down arrow in a colored badge), title, description, confidence score as both a number and a mini progress bar, and a relative timestamp.
+
+The bookmark button writes the signal ID to a `BookmarkedSignals` store (persisted to the user's account). Bookmarked signals are highlighted in the feed and passed to the accuracy tracker.
+
+### Layer 6.6 — Accuracy tracker
+
+24 hours after a signal fires, a background job fetches the current price for each bookmarked signal's symbol and compares it against the price at the time the signal fired. A buy signal is marked "validated" if the price rose, "invalidated" if it fell. The 30-day accuracy metric in the KPI cards is the percentage of validated signals over the trailing 30-day window.
+
+---
+
+## Files created in Phases 5 & 6
+
+```
+/components/modules/heatmap/HeatmapGrid.tsx
+/components/modules/heatmap/MarketSwitcher.tsx
+/components/modules/heatmap/ColorModeSwitcher.tsx
+/components/modules/heatmap/SectorChart.tsx
+/components/modules/heatmap/ColorLegend.tsx
+/store/heatmapStore.ts
+/lib/utils/colorInterpolation.ts
+/lib/utils/treemapLayout.ts
+/app/api/heatmap/route.ts
+
+/components/modules/signals/SignalFeed.tsx
+/components/modules/signals/SignalRow.tsx
+/components/modules/signals/SignalKPICards.tsx
+/components/modules/signals/ConfidenceBar.tsx
+/hooks/useSignals.ts
+/store/signalStore.ts
+/store/bookmarkStore.ts
+/lib/signals/rules.ts
+/lib/signals/confidenceScorer.ts
+/app/api/signals/route.ts
+/app/api/signals/detect/route.ts
+/app/api/signals/accuracy/route.ts
+```
+
+---
+
+Ready to continue to Phase 7 — Portfolio, or jump straight into coding any of these phases?
 ---
 
 ## Phase 6 — Signals Module
