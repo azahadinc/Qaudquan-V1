@@ -18,7 +18,7 @@ export const useConnectionStatusStore = create<ConnectionStatusState>((set, get)
   statuses: {
     polygon: 'connecting',
     binance: 'connecting',
-    oanda: 'connecting',
+    alpaca: 'connecting',
     alphavantage: 'connecting',
     finnhub: 'connecting',
   },

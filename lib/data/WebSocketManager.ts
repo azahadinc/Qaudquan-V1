@@ -200,6 +200,15 @@ export class WebSocketManager {
         action: 'auth',
         params: apiKey,
       }));
+    } else if (provider === 'alpaca') {
+      // Alpaca requires key and secret, but for now assume apiKey contains both or just key
+      // TODO: Update settings to handle key/secret separately
+      const [key, secret] = apiKey?.split(':') || ['', ''];
+      state.ws?.send(JSON.stringify({
+        action: 'auth',
+        key: key || apiKey,
+        secret: secret || '',
+      }));
     } else if (provider === 'finnhub') {
       // Finnhub auth is in URL, but may need additional handshake
     }
@@ -211,6 +220,12 @@ export class WebSocketManager {
         return {
           action: 'subscribe',
           params: symbols.map(s => `T.${s},Q.${s}`).join(','),
+        };
+      case 'alpaca':
+        return {
+          action: 'subscribe',
+          trades: symbols,
+          quotes: symbols,
         };
       case 'binance':
         return {
@@ -234,6 +249,12 @@ export class WebSocketManager {
         return {
           action: 'unsubscribe',
           params: symbols.map(s => `T.${s},Q.${s}`).join(','),
+        };
+      case 'alpaca':
+        return {
+          action: 'unsubscribe',
+          trades: symbols,
+          quotes: symbols,
         };
       case 'binance':
         return {

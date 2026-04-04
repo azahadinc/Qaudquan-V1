@@ -3,7 +3,7 @@
  * Maps market types to their respective data providers
  */
 
-export type Provider = 'polygon' | 'binance' | 'oanda' | 'alphavantage' | 'finnhub';
+export type Provider = 'polygon' | 'binance' | 'alpaca' | 'alphavantage' | 'finnhub';
 
 export interface ProviderConfig {
   name: string;
@@ -30,12 +30,12 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
     isWebSocket: true,
     authRequired: false,
   },
-  oanda: {
-    name: 'OANDA',
-    url: 'https://stream-fxpractice.oanda.com/v3/accounts/{accountId}/pricing/stream',
-    apiKey: process.env.OANDA_API_KEY,
-    markets: ['forex'],
-    isWebSocket: false, // HTTP streaming
+  alpaca: {
+    name: 'Alpaca',
+    url: 'wss://stream.data.alpaca.markets/v2/stocks',
+    apiKey: process.env.ALPACA_API_KEY,
+    markets: ['forex', 'equity'],
+    isWebSocket: true,
     authRequired: true,
   },
   alphavantage: {

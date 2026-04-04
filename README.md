@@ -217,7 +217,7 @@ Test files in `/e2e` directory
 Phase 8 will connect real market data APIs and replace mock data with live streams:
 - Equities via Polygon.io / Alpha Vantage
 - Crypto via Binance WebSocket / CoinGecko
-- Forex via OANDA / Frankfurter
+- Forex via Alpaca / Frankfurter
 - Commodities via a market feed
 - Add REST polling, WebSocket management, and normalized internal data schemas
 

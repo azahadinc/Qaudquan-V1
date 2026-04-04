@@ -12,6 +12,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { PROVIDER_CONFIGS, Provider } from '../config/providers';
 import { normalisePolygon } from '../lib/data/normaliser/polygon';
 import { normaliseBinance } from '../lib/data/normaliser/binance';
+import { normaliseAlpaca } from '../lib/data/normaliser/alpaca';
 import { normaliseAlphaVantage } from '../lib/data/normaliser/alphavantage';
 import { normaliseFinnhub } from '../lib/data/normaliser/finnhub';
 
@@ -88,7 +89,7 @@ export class TickPipeline {
 
   private async startWebSocketConnections() {
     const promises = [
-      this.wsManager.connect('polygon'),
+      this.wsManager.connect('alpaca'),
       this.wsManager.connect('binance'),
       this.wsManager.connect('finnhub'),
     ];
@@ -132,7 +133,7 @@ export class TickPipeline {
   }
 
   private subscribeToSymbols(symbols: Record<string, string[]>) {
-    // Subscribe equities to Polygon
+    // Subscribe equities to Alpaca (since it supports equities now)
     if (symbols.equity?.length) {
       this.symbolRegistry.add(symbols.equity[0], 'equity'); // Add one by one for now
     }
@@ -142,7 +143,7 @@ export class TickPipeline {
       this.symbolRegistry.add(symbols.crypto[0], 'crypto');
     }
 
-    // Forex would be handled by OANDA streaming (not implemented in this mock)
+    // Forex could be handled by Alpaca when forex support is added
     // Commodities are handled by REST polling above
   }
 
@@ -164,6 +165,18 @@ export class TickPipeline {
       if (msg.stream && msg.data) {
         const tick = normaliseBinance(msg.data);
         useTickStore.getState().setTick(tick.symbol, tick);
+      }
+    });
+
+    // Alpaca handler
+    this.wsManager.onMessage('alpaca', (msg: any) => {
+      if (Array.isArray(msg)) {
+        msg.forEach(item => {
+          if (item.T === 't' || item.T === 'q') {
+            const tick = normaliseAlpaca(item);
+            useTickStore.getState().setTick(tick.symbol, tick);
+          }
+        });
       }
     });
 

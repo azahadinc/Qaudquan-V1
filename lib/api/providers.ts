@@ -60,11 +60,11 @@ export class BinanceClient extends APIClient {
 }
 
 /**
- * OANDA API Client (Forex data)
+ * Alpaca API Client (Equity and Forex data)
  */
-export class OandaClient extends APIClient {
+export class AlpacaClient extends APIClient {
   constructor(apiKey: string) {
-    super('https://api-fxpractice.oanda.com/v3');
+    super('https://api.alpaca.markets');
     this.setAuthHeader(apiKey);
   }
 

@@ -11,7 +11,7 @@ const envSchema = z.object({
   // API Keys - Financial Data
   NEXT_PUBLIC_POLYGON_API_KEY: z.string().optional(),
   NEXT_PUBLIC_BINANCE_WS_URL: z.string().default('wss://stream.binance.com:9443/ws'),
-  OANDA_API_KEY: z.string().optional(),
+  ALPACA_API_KEY: z.string().optional(),
   ALPHA_VANTAGE_API_KEY: z.string().optional(),
   FINNHUB_API_KEY: z.string().optional(),
 

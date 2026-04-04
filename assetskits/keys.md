@@ -3,3 +3,7 @@ finnhub "d78p86pr01qp0fl62mb0d78p86pr01qp0fl62mbg"
  Alpha Vantage API key: CW1A9POTGIBPJZI9
 
  polygon.ai "ZIrrI5KK4uUGsf61uOitCzSXGhMligJ0"
+
+ Alpaca key "PKP5PYAIFV6P3TFZ56D5S5F5RD"
+ Alpaca secret "25yLTf393nHQwBEwJEatF4dMLktwRZbqr8QnuhvNHesR"
+ PKP5PYAIFV6P3TFZ56D5S5F5RD:25yLTf393nHQwBEwJEatF4dMLktwRZbqr8QnuhvNHesR

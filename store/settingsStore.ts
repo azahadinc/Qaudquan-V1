@@ -10,7 +10,7 @@ interface SettingsState {
   apiKeys: {
     polygon?: string;
     binance?: string;
-    oanda?: string;
+    alpaca?: string;
     alphavantage?: string;
     finnhub?: string;
   };

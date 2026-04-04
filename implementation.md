@@ -80,7 +80,7 @@ interface Instrument {
 
 **Environment configuration**
 
-Set up `.env.local` with all API keys from day one — Polygon, Binance, OANDA, Alpha Vantage, Finnhub. Create a `config/env.ts` file that validates all required variables are present at startup using Zod, throwing a clear error if any are missing rather than silently failing at runtime.
+Set up `.env.local` with all API keys from day one — Polygon, Binance, Alpaca, Alpha Vantage, Finnhub. Create a `config/env.ts` file that validates all required variables are present at startup using Zod, throwing a clear error if any are missing rather than silently failing at runtime.
 
 **Testing infrastructure**
 
@@ -1271,7 +1271,7 @@ Equities use Polygon.io. The free tier supports 15-minute delayed data; the Star
 
 Crypto uses Binance WebSocket directly, which is free with no API key for public market data. The endpoint is `wss://stream.binance.com:9443/ws`. Subscribe to `<symbol>@ticker` for 24h rolling stats or `<symbol>@trade` for individual trades. CoinGecko REST fills in metadata — market cap, names, descriptions — that Binance doesn't provide.
 
-Forex uses OANDA's streaming API, which requires an account (free demo available). The streaming endpoint is `https://stream-fxpractice.oanda.com/v3/accounts/{id}/pricing/stream`. OANDA streams pricing via HTTP chunked transfer (not WebSocket), so the transport layer handles it differently — it's a persistent HTTP request that receives newline-delimited JSON chunks.
+Forex uses Alpaca's streaming API, which requires an account (free demo available). The streaming endpoint is `https://stream.data.alpaca.markets/v2/forex`. Alpaca streams pricing via WebSocket, so the transport layer handles it similarly to other WebSocket providers.
 
 Commodities use Alpha Vantage REST. Alpha Vantage has no WebSocket support, so all commodity data arrives via polling. The free tier gives 25 requests/day; the premium tier at $50/month gives 75 requests/minute, which is sufficient for polling 10–15 commodity symbols every 15 seconds.
 
@@ -1372,8 +1372,8 @@ function normaliseBinance(raw: BinanceTicker): Tick {
   }
 }
 
-// OANDA pricing chunk
-function normaliseOANDA(raw: OANDAPricing): Tick {
+// Alpaca pricing chunk
+function normaliseAlpaca(raw: AlpacaMessage): Tick {
   const mid = (parseFloat(raw.asks[0].price) + parseFloat(raw.bids[0].price)) / 2
   return {
     symbol: raw.instrument.replace('_', '/'),
@@ -1381,14 +1381,14 @@ function normaliseOANDA(raw: OANDAPricing): Tick {
     price: mid,
     size: 0,
     timestamp: new Date(raw.time).getTime(),
-    exchange: 'OANDA',
+    exchange: 'ALPACA',
     change: 0,
     changePct: 0,
   }
 }
 ```
 
-The `change` and `changePct` fields for providers that don't include them (Polygon, OANDA) are computed by the tick store on write, by comparing the incoming price against the stored `prevClose` for that symbol. The `prevClose` is fetched once per symbol on application load from a historical endpoint.
+The `change` and `changePct` fields for providers that don't include them (Alpaca, Polygon) are computed by the tick store on write, by comparing the incoming price against the stored `prevClose` for that symbol. The `prevClose` is fetched once per symbol on application load from a historical endpoint.
 
 ---
 
@@ -1423,7 +1423,7 @@ On application load, the following happens in order:
 
 4. Subscribe to all equity symbols on Polygon, all crypto symbols on Binance.
 
-5. Start the OANDA HTTP stream for all forex pairs in the watchlist.
+5. Start the Alpaca WebSocket stream for all forex pairs in the watchlist.
 
 6. Start the `RESTPoller` for Alpha Vantage (commodities) and any equity symbols not covered by the WebSocket subscription tier.
 
@@ -1447,7 +1447,7 @@ class SymbolRegistry {
     // Subscribe on the appropriate provider
     if (market === 'equity') wsManager.subscribe('polygon', [symbol])
     if (market === 'crypto') wsManager.subscribe('binance', [symbol])
-    if (market === 'forex') oandaStream.addPair(symbol)
+    if (market === 'forex') alpacaStream.addPair(symbol)
     if (market === 'commodity') restPoller.addSymbol('alphavantage', symbol)
   }
 
@@ -1490,7 +1490,7 @@ type ProviderStatus = 'connected' | 'connecting' | 'reconnecting' | 'error' | 'd
 interface ConnectionStatusState {
   polygon: ProviderStatus
   binance: ProviderStatus
-  oanda: ProviderStatus
+  alpaca: ProviderStatus
   alphavantage: ProviderStatus
   finnhub: ProviderStatus
 }
@@ -1530,7 +1530,7 @@ Failed normalisation (unexpected response shape) logs the raw payload to the bro
 /lib/data/SymbolRegistry.ts
 /lib/data/normaliser/polygon.ts
 /lib/data/normaliser/binance.ts
-/lib/data/normaliser/oanda.ts
+/lib/data/normaliser/alpaca.ts
 /lib/data/normaliser/alphavantage.ts
 /lib/data/normaliser/finnhub.ts
 /lib/data/candleAggregator.ts
@@ -1551,7 +1551,7 @@ Failed normalisation (unexpected response shape) logs the raw payload to the bro
 
 **Layer 1 — External data sources**
 
-Each market type maps to a dedicated provider. For equities, Polygon.io gives REST endpoints for OHLCV history and a WebSocket feed for real-time trades and quotes. For crypto, Binance WebSocket is the most reliable free source for live price ticks and order book depth; CoinGecko covers metadata and market cap. For forex, OANDA's streaming API delivers real-time bid/ask spreads on all major pairs. For commodities, Alpha Vantage covers gold, crude oil, natural gas, and agricultural futures. NewsAPI (or Finnhub) adds a sentiment layer — scanning headlines and scoring them bullish/bearish per ticker.
+Each market type maps to a dedicated provider. For equities, Alpaca gives REST endpoints for OHLCV history and a WebSocket feed for real-time trades and quotes. For crypto, Binance WebSocket is the most reliable free source for live price ticks and order book depth; CoinGecko covers metadata and market cap. For forex, Alpaca's streaming API delivers real-time bid/ask spreads on all major pairs. For commodities, Alpha Vantage covers gold, crude oil, natural gas, and agricultural futures. NewsAPI (or Finnhub) adds a sentiment layer — scanning headlines and scoring them bullish/bearish per ticker.
 
 ---
 
@@ -1591,7 +1591,7 @@ Each UI module subscribes only to the symbols it currently displays. The dashboa
 |---|---|
 | Equities real-time | Polygon.io WebSocket |
 | Crypto real-time | Binance WebSocket |
-| Forex | OANDA Streaming API |
+| Forex | Alpaca Streaming API |
 | Commodities | Alpha Vantage REST |
 | Sentiment | Finnhub / NewsAPI |
 | Frontend state | Zustand |

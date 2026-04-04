@@ -65,13 +65,13 @@ export class SymbolRegistry {
   private subscribeOnProvider(symbol: string, market: Market): void {
     switch (market) {
       case 'equity':
-        this.wsManager.subscribe('polygon', [symbol]);
+        this.wsManager.subscribe('alpaca', [symbol]);
         break;
       case 'crypto':
         this.wsManager.subscribe('binance', [symbol]);
         break;
       case 'forex':
-        // OANDA uses HTTP streaming, handled separately
+        // Alpaca can handle forex via its streaming APIs, handled separately
         break;
       case 'commodity':
         // Alpha Vantage uses REST polling, handled separately
@@ -82,13 +82,13 @@ export class SymbolRegistry {
   private unsubscribeFromProvider(symbol: string, market: Market): void {
     switch (market) {
       case 'equity':
-        this.wsManager.unsubscribe('polygon', [symbol]);
+        this.wsManager.unsubscribe('alpaca', [symbol]);
         break;
       case 'crypto':
         this.wsManager.unsubscribe('binance', [symbol]);
         break;
       case 'forex':
-        // OANDA unsubscription handled separately
+        // Alpaca unsubscription would be handled separately
         break;
       case 'commodity':
         // Alpha Vantage unsubscription handled separately
