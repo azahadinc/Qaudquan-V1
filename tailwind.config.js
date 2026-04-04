@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 
-const tokens = require('./config/tokens.js');
+const { tokens } = require('./config/tokens.js');
 
 module.exports = {
   content: [
@@ -19,6 +19,9 @@ module.exports = {
         primary: tokens.colors.primary,
         secondary: tokens.colors.secondary,
         surface: tokens.colors.surface,
+        'surface-primary': tokens.colors.surface.bg,
+        'surface-secondary': tokens.colors.surface.variant,
+        'surface-tertiary': tokens.colors.surfaceVariant.border,
         'surface-variant': tokens.colors.surfaceVariant,
       },
       spacing: tokens.spacing,

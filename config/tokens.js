@@ -198,4 +198,4 @@ const tokens = {
   },
 };
 
-module.exports = tokens;
+module.exports = { tokens };
