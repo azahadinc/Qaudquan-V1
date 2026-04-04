@@ -284,7 +284,175 @@ Use `@tanstack/react-table` for the screener table. It handles column sorting, r
 
 Users can save a filter configuration as a named screener preset. Presets are stored per account in the database and loaded on login. The preset selector dropdown at the top of the screener panel shows all saved presets plus a "New screener" option. This is the foundation for Phase 10's full screener logic engine.
 
+Here's Phase 3 — three focused diagrams covering the full screener architecture. First, the structural overview.Now the filter request lifecycle — exactly what happens from the moment a user changes a filter to when results appear on screen.Finally the build sequence — the exact order to assemble Phase 3 without blockers.Click any node for a deep dive on that step. Here's the full layer breakdown:
 
+---
+
+## Layer 1 — ScreenerStore (Zustand)
+
+This is the single source of truth for all screener state. It holds the active filter array, current sort configuration, pagination state, and active preset name. No component touches filter state directly — everything goes through the store.
+
+```typescript
+interface ScreenerState {
+  filters: ScreenerFilter[]
+  sortField: string
+  sortDir: 'asc' | 'desc'
+  page: number
+  pageSize: number
+  activePreset: string | null
+  setFilter: (filter: ScreenerFilter) => void
+  removeFilter: (field: string) => void
+  resetFilters: () => void
+  setSort: (field: string, dir: 'asc' | 'desc') => void
+  loadPreset: (preset: ScreenerPreset) => void
+}
+```
+
+The `setFilter` action is additive — it upserts into the array by `field`. Setting the RSI filter a second time replaces the first. This means the filter bar never needs to worry about duplicates.
+
+---
+
+## Layer 2 — ScreenerFilterBar
+
+Six dropdown controls, each independently wired to the store. The key design decision is that every dropdown calls `setFilter` on change with a fully typed `ScreenerFilter` object — not a raw string. The dropdown value is a display concern; what gets written to the store is always a structured filter.
+
+```typescript
+// RSI dropdown change handler
+onChange={(value) => {
+  if (value === 'overbought') {
+    setFilter({ field: 'rsi', operator: 'gt', value: 70 })
+  } else if (value === 'oversold') {
+    setFilter({ field: 'rsi', operator: 'lt', value: 30 })
+  } else {
+    removeFilter('rsi')
+  }
+}}
+```
+
+Adding a new filter type (e.g. P/E ratio) only requires adding a new dropdown and a new handler. The store, hook, and table need no changes.
+
+---
+
+## Layer 3a — Server API route (`/api/screener`)
+
+A Next.js API route that receives the `filters[]` array as a POST body, translates each filter into a Redis command, and returns matching symbols as JSON. The translation is a simple switch statement over `filter.field`:
+
+```typescript
+// Translate ScreenerFilter to Redis scan condition
+case 'rsi':
+  return `@rsi:[${min} ${max}]`
+case 'volume':
+  return `@volumeRatio:[${min} +inf]`
+case 'signal':
+  return `@signal:{${value}}`
+```
+
+The route uses Redis Stack's search capability (`FT.SEARCH`) if available, or falls back to scanning a sorted set. Response time target is under 80ms for a 500-instrument universe.
+
+---
+
+## Layer 3b — Redis pre-compute worker
+
+A cron job (Vercel Cron or a background Node worker) runs every 60 seconds. It fetches the latest candles for all tracked instruments, computes RSI, MACD signal line, volume ratio (current/20-day avg), and the composite signal label (Buy/Sell/Hold), then writes results to Redis as a hash per symbol:
+
+```typescript
+await redis.hSet(`metrics:${symbol}`, {
+  rsi: rsi14.toFixed(2),
+  macd: macdSignal.toFixed(4),
+  volumeRatio: volRatio.toFixed(2),
+  sma50: sma50.toFixed(2),
+  sma200: sma200.toFixed(2),
+  signal: computeSignal(rsi14, macdSignal, volRatio),
+  updatedAt: Date.now()
+})
+```
+
+This means the screener API never computes indicators on request — it only reads pre-computed values. Screener response time is therefore I/O-bound (Redis lookup), not CPU-bound (indicator math).
+
+---
+
+## Layer 4 — useScreener hook
+
+This hook is the bridge between the store and the component. It reads `filters[]` from the store, decides the routing path, fires the appropriate query, and returns a uniform result shape regardless of which path was taken.
+
+```typescript
+function useScreener() {
+  const { filters, sortField, sortDir, page } = useScreenerStore()
+  const isLargeUniverse = useMarketFilter() === 'all' && selectedMarkets.includes('equity')
+
+  const serverQuery = useQuery({
+    queryKey: ['screener', filters, sortField, sortDir, page],
+    queryFn: () => fetch('/api/screener', {
+      method: 'POST',
+      body: JSON.stringify({ filters, sortField, sortDir, page })
+    }).then(r => r.json()),
+    enabled: isLargeUniverse,
+    staleTime: 30_000
+  })
+
+  const clientResult = useMemo(() => {
+    if (isLargeUniverse) return null
+    return applyFilters(cachedInstruments, filters)
+  }, [filters, cachedInstruments, isLargeUniverse])
+
+  return isLargeUniverse ? serverQuery.data : clientResult
+}
+```
+
+The hook also handles debouncing — filter changes are debounced 300ms before triggering a server request, preventing a flood of API calls as the user adjusts sliders.
+
+---
+
+## Layer 5 — ScreenerTable
+
+Built on TanStack Table (`@tanstack/react-table`). All columns are defined in a `columnDefs` array — each column is a plain object with `accessorKey`, `header`, `cell`, and `sortingFn`. Adding a new column means adding one object to the array.
+
+The signal column uses a custom cell renderer that maps signal values to badge components:
+
+```typescript
+{
+  accessorKey: 'signal',
+  header: 'Signal',
+  cell: ({ getValue }) => {
+    const signal = getValue<string>()
+    return <SignalBadge signal={signal} />
+  }
+}
+```
+
+Row virtualization uses TanStack Virtual (`@tanstack/react-virtual`) with an estimated row height of 44px. Only visible rows render in the DOM — 500 results feel the same as 50. Column header clicks toggle sort direction and write back to the store.
+
+---
+
+## Layer 6 — Saved presets
+
+A preset is a named snapshot of a `filters[]` array. The UI shows a dropdown in the filter bar header with all saved presets plus "New screener". Selecting a preset calls `loadPreset()` which replaces the entire `filters[]` in the store.
+
+Three API routes handle persistence: `GET /api/presets` returns all presets for the current user, `POST /api/presets` saves a new one, and `DELETE /api/presets/[id]` removes one. Presets are stored in the user's database row as a JSON column — simple, portable, no schema migration needed to add a new filter field.
+
+---
+
+## Files created in Phase 3
+
+```
+/components/modules/screener/ScreenerFilterBar.tsx
+/components/modules/screener/ScreenerTable.tsx
+/components/modules/screener/columnDefs.ts
+/components/modules/screener/SignalBadge.tsx
+/components/modules/screener/PresetDropdown.tsx
+/hooks/useScreener.ts
+/store/screenerStore.ts
+/lib/utils/applyFilters.ts
+/lib/utils/computeMetrics.ts
+/app/api/screener/route.ts
+/app/api/presets/route.ts
+/app/api/presets/[id]/route.ts
+/workers/metricsPrecompute.ts
+```
+
+---
+
+Ready to continue to Phase 4 — Charts & Technical Analysis blueprint, or shall we go deeper on any Phase 3 layer?
 
 ---
 

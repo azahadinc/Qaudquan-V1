@@ -12,11 +12,13 @@ export const navConfig: NavItem[] = [
     id: 'dashboard',
     label: 'Dashboard',
     icon: 'M3 12a9 9 0 110-18 9 9 0 010 18zm0 0a9 9 0 100-18 9 9 0 000 18z',
+    href: '/dashboard',
   },
   {
     id: 'screener',
     label: 'Screener',
     icon: 'M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z',
+    href: '/screener',
   },
   {
     id: 'charts',

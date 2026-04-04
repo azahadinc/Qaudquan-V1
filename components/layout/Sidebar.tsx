@@ -1,11 +1,16 @@
 'use client'
 
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useNavStore } from '@/lib/store/navStore'
 import { tokens } from '@/config/tokens'
 import { navConfig, NavItem } from './navConfig'
 
 export function Sidebar() {
-  const { isCollapsed, toggleCollapse, activePage, setPage } = useNavStore()
+  const pathname = usePathname()
+  const { isCollapsed, toggleCollapse, setPage } = useNavStore()
+
+  const activePage = navConfig.find((item) => item.href === pathname)?.id ?? ''
 
   // Group nav items by section
   const groupedItems = navConfig.reduce(
@@ -66,10 +71,8 @@ export function Sidebar() {
             <div className="space-y-1">
               {items.map((item) => {
                 const isActive = activePage === item.id
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setPage(item.id)}
+                const itemContent = (
+                  <div
                     className={`
                       w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
                       transition-colors whitespace-nowrap text-sm font-medium
@@ -96,6 +99,25 @@ export function Sidebar() {
                       <path d={item.icon} />
                     </svg>
                     {!isCollapsed && <span>{item.label}</span>}
+                  </div>
+                )
+
+                return item.href ? (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    onClick={() => setPage(item.id)}
+                    className="block"
+                  >
+                    {itemContent}
+                  </Link>
+                ) : (
+                  <button
+                    key={item.id}
+                    onClick={() => setPage(item.id)}
+                    className="w-full"
+                  >
+                    {itemContent}
                   </button>
                 )
               })}
