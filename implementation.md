@@ -1250,7 +1250,303 @@ This builds on what was designed in the architecture diagram. The key implementa
 8. Add a connection status indicator in the topbar that shows WebSocket health.
 
 Here's the full architecture blueprint for Phase 8, followed by a detailed breakdown of every layer.Click any node in the diagram to drill deeper into that component. Here's a full written breakdown of each layer:
+blueprint
+## Phase 8 — Live Data Integration Blueprint
 
+---
+
+### What Phase 8 actually does
+
+Every phase before this ran on mock data. Phase 8 rips out all the static arrays and fake ticks and replaces them with real market feeds. When Phase 8 is complete, every price, every percentage change, every volume figure, every indicator value in the entire application is sourced from a live provider and flows through a unified data pipeline into the components built in Phases 2–7.
+
+The guiding principle for this phase is that no component ever knows where its data comes from. Components call `useTick('AAPL')` and get a price. They don't know if that price arrived via WebSocket, REST poll, or cache. The data pipeline is completely invisible to the UI layer.
+
+---
+
+### Provider assignment
+
+Each market type maps to a specific provider chosen for reliability, cost, and WebSocket support.
+
+Equities use Polygon.io. The free tier supports 15-minute delayed data; the Starter plan at $29/month unlocks real-time WebSocket. Polygon's WebSocket endpoint is `wss://socket.polygon.io/stocks`. Subscribe to `T.*` for trades and `Q.*` for quotes on specific symbols.
+
+Crypto uses Binance WebSocket directly, which is free with no API key for public market data. The endpoint is `wss://stream.binance.com:9443/ws`. Subscribe to `<symbol>@ticker` for 24h rolling stats or `<symbol>@trade` for individual trades. CoinGecko REST fills in metadata — market cap, names, descriptions — that Binance doesn't provide.
+
+Forex uses OANDA's streaming API, which requires an account (free demo available). The streaming endpoint is `https://stream-fxpractice.oanda.com/v3/accounts/{id}/pricing/stream`. OANDA streams pricing via HTTP chunked transfer (not WebSocket), so the transport layer handles it differently — it's a persistent HTTP request that receives newline-delimited JSON chunks.
+
+Commodities use Alpha Vantage REST. Alpha Vantage has no WebSocket support, so all commodity data arrives via polling. The free tier gives 25 requests/day; the premium tier at $50/month gives 75 requests/minute, which is sufficient for polling 10–15 commodity symbols every 15 seconds.
+
+Sentiment uses Finnhub's WebSocket (`wss://ws.finnhub.io`) for real-time news headlines per symbol, supplemented by a REST poll to their `/news` endpoint for historical context.
+
+---
+
+### Transport layer architecture
+
+The transport layer consists of two classes: `WebSocketManager` and `RESTPoller`. Both are instantiated once at application startup (in a `_app.tsx` effect or a Next.js layout component) and run for the lifetime of the session.
+
+**WebSocketManager**
+
+This class manages all persistent WebSocket connections. It maintains a registry of active subscriptions — a `Map<string, Set<string>>` where the key is the connection URL and the value is the set of symbols currently subscribed on that connection.
+
+The critical methods are:
+
+`connect(url, apiKey)` — opens a WebSocket connection to the given URL, handles the authentication handshake (Polygon requires sending `{"action":"auth","params":"<key>"}` immediately after connection), and begins the reconnect loop.
+
+`subscribe(url, symbols)` — sends the subscription message for the given symbols on the appropriate connection. For Polygon this is `{"action":"subscribe","params":"T.AAPL,T.MSFT"}`. For Binance it requires opening a new stream URL or sending a `SUBSCRIBE` frame.
+
+`reconnect(url)` — implements exponential backoff: 1s, 2s, 4s, 8s, 16s, cap at 30s. Uses a `reconnectAttempts` counter per connection that resets to 0 on successful message receipt. Every reconnect re-subscribes to all symbols in the registry for that connection — no subscriptions are lost on disconnect.
+
+`heartbeat(url)` — sends a ping frame every 30 seconds. If no pong is received within 10 seconds, treats the connection as dead and triggers reconnect.
+
+`onMessage(url, handler)` — registers a message handler. Internally, all messages from a given connection route through a single `onmessage` handler that normalises the payload and emits it to the registered handler.
+
+The manager exposes connection health state — `connected | connecting | reconnecting | error` — per provider. This feeds the live status indicator in the topbar.
+
+```typescript
+class WebSocketManager {
+  private connections = new Map<string, WebSocket>()
+  private subscriptions = new Map<string, Set<string>>()
+  private reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private attempts = new Map<string, number>()
+  private handlers = new Map<string, (msg: unknown) => void>()
+  private status = new Map<string, ConnectionStatus>()
+
+  connect(provider: Provider): void
+  subscribe(provider: Provider, symbols: string[]): void
+  unsubscribe(provider: Provider, symbols: string[]): void
+  onMessage(provider: Provider, handler: (msg: unknown) => void): void
+  getStatus(provider: Provider): ConnectionStatus
+  destroy(): void
+}
+```
+
+**RESTPoller**
+
+A simpler class that wraps `setInterval` per provider with configurable intervals. Each provider has a registered adapter function that knows how to call its specific REST endpoint and parse the response. The poller calls the adapter, passes the result to the normaliser, and writes to the tick store.
+
+```typescript
+class RESTPoller {
+  private intervals = new Map<string, ReturnType<typeof setInterval>>()
+
+  register(provider: Provider, adapter: () => Promise<RawTick[]>, intervalMs: number): void
+  start(provider: Provider): void
+  stop(provider: Provider): void
+  setInterval(provider: Provider, intervalMs: number): void
+  destroy(): void
+}
+```
+
+The interval is pulled from the Settings store at startup and updated reactively when the user changes the refresh interval in Settings. Changing from 15s to 5s calls `setInterval` on each REST provider, which clears the old interval and starts a new one.
+
+---
+
+### Normaliser
+
+Every provider returns data in a different shape. The normaliser is a set of pure adapter functions — one per provider — that convert raw payloads into the canonical `Tick` type defined in Phase 1:
+
+```typescript
+// Polygon trade event
+function normalisePolygon(raw: PolygonTrade): Tick {
+  return {
+    symbol: raw.sym,
+    market: 'equity',
+    price: raw.p,
+    size: raw.s,
+    timestamp: raw.t,
+    exchange: raw.x,
+    change: 0,        // computed downstream from previous close
+    changePct: 0,
+  }
+}
+
+// Binance 24hr ticker
+function normaliseBinance(raw: BinanceTicker): Tick {
+  return {
+    symbol: raw.s.replace('USDT', ''),
+    market: 'crypto',
+    price: parseFloat(raw.c),
+    size: parseFloat(raw.q),
+    timestamp: raw.E,
+    exchange: 'BINANCE',
+    change: parseFloat(raw.p),
+    changePct: parseFloat(raw.P),
+  }
+}
+
+// OANDA pricing chunk
+function normaliseOANDA(raw: OANDAPricing): Tick {
+  const mid = (parseFloat(raw.asks[0].price) + parseFloat(raw.bids[0].price)) / 2
+  return {
+    symbol: raw.instrument.replace('_', '/'),
+    market: 'forex',
+    price: mid,
+    size: 0,
+    timestamp: new Date(raw.time).getTime(),
+    exchange: 'OANDA',
+    change: 0,
+    changePct: 0,
+  }
+}
+```
+
+The `change` and `changePct` fields for providers that don't include them (Polygon, OANDA) are computed by the tick store on write, by comparing the incoming price against the stored `prevClose` for that symbol. The `prevClose` is fetched once per symbol on application load from a historical endpoint.
+
+---
+
+### Tick store write path
+
+When a normalised tick arrives — from either WebSocket or REST — it follows this exact sequence before reaching any component:
+
+**Step 1 — Deduplication.** The tick store checks if the incoming `(symbol, timestamp)` pair has been seen in the last 100ms. If so, it discards the tick. This prevents double-processing when both a WebSocket and a REST poll return the same event.
+
+**Step 2 — Change computation.** If `changePct` is zero (provider doesn't supply it), compute it from `prevClose`:
+```typescript
+const changePct = prevClose ? ((price - prevClose) / prevClose) * 100 : 0
+```
+
+**Step 3 — Candle aggregation.** The tick is folded into the current open candle for each tracked timeframe. The 1-minute candle updates its `high`, `low`, and `close`. When the minute boundary crosses, the current candle closes and a new one opens.
+
+**Step 4 — Store write.** `ticks[symbol]` is replaced with the new tick object. Because Zustand uses reference equality, only components subscribed to this specific symbol selector re-render.
+
+**Step 5 — History buffer.** The last 100 ticks per symbol are kept in a rolling buffer. This feeds sparklines, mini-charts, and the short-term volatility indicator.
+
+---
+
+### Provider startup sequence
+
+On application load, the following happens in order:
+
+1. Fetch the symbol universe for the active market filter from `/api/symbols`. This returns the list of symbols the user is watching plus all symbols in the user's portfolio.
+
+2. For each symbol, fetch `prevClose` from the appropriate provider's historical endpoint. Store in the tick store's `prevClose` map. This is a one-time batch request, not a recurring poll.
+
+3. Start WebSocket connections for Polygon (equities) and Binance (crypto). Send authentication frames. Wait for auth confirmation before sending subscription frames.
+
+4. Subscribe to all equity symbols on Polygon, all crypto symbols on Binance.
+
+5. Start the OANDA HTTP stream for all forex pairs in the watchlist.
+
+6. Start the `RESTPoller` for Alpha Vantage (commodities) and any equity symbols not covered by the WebSocket subscription tier.
+
+7. Start the Finnhub WebSocket for news sentiment on watched symbols.
+
+8. Set the connection status in the nav store to `connected`. The topbar live indicator turns green.
+
+---
+
+### Symbol universe management
+
+The set of subscribed symbols is not static. It changes when the user adds to their watchlist, opens a new instrument in the chart, or updates their portfolio. The `SymbolRegistry` service manages this:
+
+```typescript
+class SymbolRegistry {
+  private subscribed = new Set<string>()
+
+  add(symbol: string, market: Market): void {
+    if (this.subscribed.has(symbol)) return
+    this.subscribed.add(symbol)
+    // Subscribe on the appropriate provider
+    if (market === 'equity') wsManager.subscribe('polygon', [symbol])
+    if (market === 'crypto') wsManager.subscribe('binance', [symbol])
+    if (market === 'forex') oandaStream.addPair(symbol)
+    if (market === 'commodity') restPoller.addSymbol('alphavantage', symbol)
+  }
+
+  remove(symbol: string): void {
+    if (!this.subscribed.has(symbol)) return
+    this.subscribed.delete(symbol)
+    // Unsubscribe from provider to stop receiving unwanted data
+    // ... provider-specific unsubscribe
+  }
+}
+```
+
+The registry is called whenever the watchlist changes, whenever a chart opens a new symbol, and whenever a position is added to the portfolio. It ensures exactly the right symbols are subscribed — no more, no less.
+
+---
+
+### Replacing mock data across phases
+
+This is the mechanical work of Phase 8. Each module's mock data is removed and replaced with real store reads.
+
+In Phase 2 (Dashboard), the static watchlist array is replaced with `useWatchlist()` which reads from the `TickStore`. Each `WatchlistRow` calls `useTick(symbol)` to get a live price. The performance chart's hardcoded data array is replaced with a React Query fetch to `GET /api/portfolio/history?range=1W`.
+
+In Phase 3 (Screener), the static screener results array is replaced with the `useScreener()` hook built in Phase 3, which now reads from the live Redis pre-computed metrics store that is populated by Phase 8's tick pipeline.
+
+In Phase 5 (Heatmap), the hardcoded symbol array is replaced with a live `/api/heatmap` response that reads from Redis. The snapshot worker now fires against real symbol data.
+
+In Phase 6 (Signals), the static signals array is replaced with the live `/api/signals` response. The cron-based detection engine now runs against real indicator values computed from live ticks.
+
+In Phase 7 (Portfolio), the hardcoded position values are replaced with live `useTick` calls per held symbol feeding into the `usePortfolio` hook.
+
+---
+
+### Connection status UI
+
+The topbar live indicator built in Phase 2 now connects to real state. The `ConnectionStatusStore` tracks health per provider:
+
+```typescript
+type ProviderStatus = 'connected' | 'connecting' | 'reconnecting' | 'error' | 'degraded'
+
+interface ConnectionStatusState {
+  polygon: ProviderStatus
+  binance: ProviderStatus
+  oanda: ProviderStatus
+  alphavantage: ProviderStatus
+  finnhub: ProviderStatus
+}
+```
+
+The topbar indicator is `connected` (green pulse) only when all active providers report `connected`. If any provider is `reconnecting`, the indicator turns amber. If any provider is `error`, it turns red with a tooltip listing which providers are down. Clicking the indicator opens a connection health drawer showing per-provider status, last message time, and reconnect attempt count.
+
+---
+
+### Rate limiting and cost controls
+
+Polygon's WebSocket sends every trade tick — for liquid stocks this is thousands of messages per second. The tick store implements a throttle: for any given symbol, UI-triggering store writes happen at most once every 100ms. Intermediate ticks are used only for candle aggregation and are not written to the reactive store. This prevents the component tree from thrashing on high-frequency symbols.
+
+Alpha Vantage rate limiting is enforced in the `RESTPoller` — a token bucket allows at most 5 requests per minute on the free tier (or 75 on premium), with a queue that delays excess requests rather than dropping them.
+
+A cost guard in the Settings panel shows estimated monthly API spend based on the number of tracked symbols and selected refresh intervals, calculated using each provider's published pricing. Exceeding a configurable cost threshold triggers a warning and throttles polling intervals automatically.
+
+---
+
+### Error handling strategy
+
+Every transport path has a defined failure mode and recovery behavior.
+
+WebSocket disconnects trigger immediate reconnect with exponential backoff. The store serves stale data during reconnection — components show their last known price, not blank or zero. After 5 failed reconnect attempts, the provider is marked `error` and a user-facing alert suggests checking the API key.
+
+REST poll failures (HTTP 4xx or 5xx) are retried with a 3-attempt limit per poll cycle. A 429 (rate limit) response triggers automatic interval doubling until the next successful response, then gradually returns to the configured interval.
+
+Failed normalisation (unexpected response shape) logs the raw payload to the browser console in development mode and emits a telemetry event in production. The malformed payload is discarded rather than crashing the write path.
+
+---
+
+### Files created in Phase 8
+
+```
+/lib/data/WebSocketManager.ts
+/lib/data/RESTPoller.ts
+/lib/data/SymbolRegistry.ts
+/lib/data/normaliser/polygon.ts
+/lib/data/normaliser/binance.ts
+/lib/data/normaliser/oanda.ts
+/lib/data/normaliser/alphavantage.ts
+/lib/data/normaliser/finnhub.ts
+/lib/data/candleAggregator.ts
+/lib/data/tickDeduplicator.ts
+/store/connectionStatusStore.ts
+/hooks/useConnectionStatus.ts
+/hooks/useMarketFeed.ts
+/components/layout/ConnectionStatusDrawer.tsx
+/app/api/symbols/route.ts
+/app/api/prevclose/route.ts
+/app/api/portfolio/history/route.ts
+/config/providers.ts
+/workers/tickPipeline.ts
+```
+
+---
 ---
 
 **Layer 1 — External data sources**

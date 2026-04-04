@@ -1,15 +1,35 @@
 import { NextResponse } from 'next/server';
+import { useTickStore } from '../../../lib/store/tickStore';
 
 export async function GET() {
   try {
-    // TODO: Implement real market breadth calculation
-    // This should aggregate advancing/declining/unchanged stocks across watched symbols
-    
+    // Get all ticks from the store
+    const ticks = useTickStore.getState().ticks;
+    const tickValues = Object.values(ticks);
+
+    // Calculate market breadth from equity symbols
+    const equityTicks = tickValues.filter(tick => tick.market === 'equity');
+
+    let advancing = 0;
+    let declining = 0;
+    let unchanged = 0;
+
+    equityTicks.forEach(tick => {
+      if (tick.change > 0) {
+        advancing++;
+      } else if (tick.change < 0) {
+        declining++;
+      } else {
+        unchanged++;
+      }
+    });
+
     const breadth = {
-      advancing: 120,
-      declining: 80,
-      unchanged: 45,
+      advancing,
+      declining,
+      unchanged,
       timestamp: Date.now(),
+      total: equityTicks.length,
     };
 
     return NextResponse.json(breadth);

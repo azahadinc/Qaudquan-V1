@@ -22,6 +22,8 @@ export interface Tick {
   timestamp: number;
   change: number;
   changePct: number;
+  exchange?: string;
+  size?: number;
   bid?: number;
   ask?: number;
 }
