@@ -48,14 +48,7 @@ export function Sidebar() {
           title={isCollapsed ? 'Expand' : 'Collapse'}
           aria-label="Toggle sidebar"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d={isCollapsed ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7'}
-            />
-          </svg>
+          <i className={`lni ${isCollapsed ? 'lni-chevron-right' : 'lni-chevron-left'} w-5 h-5`}></i>
         </button>
       </div>
 
@@ -91,13 +84,9 @@ export function Sidebar() {
                       color: isActive ? tokens.colors.primary[600] : 'inherit',
                     }}
                   >
-                    <svg
-                      className="w-5 h-5 flex-shrink-0"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d={item.icon} />
-                    </svg>
+                    <i
+                      className={`${item.icon} w-5 h-5 flex-shrink-0`}
+                    ></i>
                     {!isCollapsed && <span>{item.label}</span>}
                   </div>
                 )

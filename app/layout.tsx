@@ -17,6 +17,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="stylesheet" href="https://cdn.lineicons.com/4.0/lineicons.css" />
+      </head>
       <body className={inter.className}>
         <DataPipelineInitializer />
         {children}

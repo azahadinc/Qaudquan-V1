@@ -43,7 +43,7 @@ export function Topbar() {
       >
         {/* Logo */}
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold">Qaudquan</h1>
+          <img src="/logo.png" alt="Qaudquan Logo" className="h-8 w-auto" />
           <span className="text-xs px-2 py-1 rounded-full bg-primary text-white opacity-75">
             v1.0
           </span>
@@ -81,12 +81,12 @@ export function Topbar() {
             className="p-2 hover:bg-surface-secondary rounded-lg transition-colors"
             title="Toggle theme"
           >
-            🌙
+            <i className="lni lni-moon"></i>
           </button>
 
           {/* User Menu */}
           <button className="p-2 hover:bg-surface-secondary rounded-lg transition-colors text-lg">
-            👤
+            <i className="lni lni-user"></i>
           </button>
         </div>
       </header>
