@@ -17,6 +17,8 @@ const nextConfig = {
     ppr: false,
   },
 
+  allowedDevOrigins: ['*.replit.dev', '*.kirk.replit.dev'],
+
   headers: () => [
     {
       source: '/:path*',
