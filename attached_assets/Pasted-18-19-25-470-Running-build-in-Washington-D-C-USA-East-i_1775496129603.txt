@@ -1,0 +1,45 @@
+18:19:25.470 Running build in Washington, D.C., USA (East) – iad1
+18:19:25.471 Build machine configuration: 2 cores, 8 GB
+18:19:25.680 Cloning github.com/azahadinc/Qaudquan-V1 (Branch: main, Commit: d0863e8)
+18:19:26.287 Cloning completed: 606.000ms
+18:19:27.612 Restored build cache from previous deployment (DrFnxnMdqJGPFpXMHQdVugLXSDrB)
+18:19:28.238 Running "vercel build"
+18:19:28.902 Vercel CLI 50.38.2
+18:19:29.351 Installing dependencies...
+18:19:30.080 npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+18:19:30.081 npm warn Unknown project config "strict-peer-dependencies". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+18:19:30.081 npm warn Unknown project config "auto-install-peers". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+18:19:31.397 npm error code ERESOLVE
+18:19:31.398 npm error ERESOLVE could not resolve
+18:19:31.398 npm error
+18:19:31.400 npm error While resolving: @react-three/drei@10.7.7
+18:19:31.401 npm error Found: react@18.3.1
+18:19:31.401 npm error node_modules/react
+18:19:31.401 npm error   react@"^18.3.1" from the root project
+18:19:31.401 npm error   peerOptional react@">=18.0.0" from zustand@5.0.12
+18:19:31.401 npm error   node_modules/@react-three/drei/node_modules/zustand
+18:19:31.401 npm error     zustand@"^5.0.1" from @react-three/drei@10.7.7
+18:19:31.401 npm error     node_modules/@react-three/drei
+18:19:31.401 npm error       @react-three/drei@"^10.7.7" from the root project
+18:19:31.402 npm error   16 more (zustand, @tanstack/react-query, @tanstack/react-table, ...)
+18:19:31.402 npm error
+18:19:31.402 npm error Could not resolve dependency:
+18:19:31.402 npm error peer react@"^19" from @react-three/drei@10.7.7
+18:19:31.402 npm error node_modules/@react-three/drei
+18:19:31.402 npm error   @react-three/drei@"^10.7.7" from the root project
+18:19:31.402 npm error
+18:19:31.402 npm error Conflicting peer dependency: react@19.2.4
+18:19:31.402 npm error node_modules/react
+18:19:31.402 npm error   peer react@"^19" from @react-three/drei@10.7.7
+18:19:31.402 npm error   node_modules/@react-three/drei
+18:19:31.402 npm error     @react-three/drei@"^10.7.7" from the root project
+18:19:31.402 npm error
+18:19:31.403 npm error Fix the upstream dependency conflict, or retry
+18:19:31.403 npm error this command with --force or --legacy-peer-deps
+18:19:31.403 npm error to accept an incorrect (and potentially broken) dependency resolution.
+18:19:31.408 npm error
+18:19:31.408 npm error
+18:19:31.408 npm error For a full report see:
+18:19:31.408 npm error /vercel/.npm/_logs/2026-04-06T17_19_29_616Z-eresolve-report.txt
+18:19:31.411 npm error A complete log of this run can be found in: /vercel/.npm/_logs/2026-04-06T17_19_29_616Z-debug-0.log
+18:19:31.450 Error: Command "npm install" exited with 1
