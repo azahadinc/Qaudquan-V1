@@ -187,8 +187,18 @@ export class WebSocketManager {
       state.ws?.close();
     });
     this.connections.clear();
-    this.handlers.clear();
-    this.statusCallbacks.clear();
+    // Note: handlers and statusCallbacks are intentionally preserved so the
+    // manager can be safely reused after shutdown (e.g. React StrictMode remount)
+
+    // Reinitialize connection states so the manager can be reused after shutdown
+    Object.keys(PROVIDER_CONFIGS).forEach((provider) => {
+      this.connections.set(provider as Provider, {
+        ws: null,
+        status: 'connecting',
+        reconnectAttempts: 0,
+        subscriptions: new Set(),
+      });
+    });
   }
 
   private sendAuth(provider: Provider): void {
