@@ -4,12 +4,14 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useAuthStore } from '../../store/authStore';
 import { PROVIDER_CONFIGS } from '../../config/providers';
 import { tickPipeline } from '../../workers/tickPipeline';
 
 export default function SettingsPage() {
   const router = useRouter();
   const { apiKeys, setApiKey, removeApiKey, getApiKey } = useSettingsStore();
+  const { logout } = useAuthStore();
   const [tempKeys, setTempKeys] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'account'>('profile');
   
@@ -90,8 +92,10 @@ export default function SettingsPage() {
 
   const handleLogout = () => {
     if (confirm('Are you sure you want to logout?')) {
-      // Clear session/auth
-      router.push('/');
+      // Clear session/auth and API connections
+      tickPipeline.disconnectAll?.();
+      logout();
+      router.push('/auth/login');
     }
   };
 
