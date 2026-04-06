@@ -26,7 +26,7 @@ export function PageShell({ children }: PageShellProps) {
         <main
           className={`
             flex-1 overflow-y-auto transition-all duration-300 ease-in-out
-            ${isCollapsed ? 'ml-16' : 'ml-64'}
+            ${isCollapsed ? 'lg:ml-16' : 'lg:ml-64'} ml-0
           `}
         >
           <div className="p-6 max-w-7xl">

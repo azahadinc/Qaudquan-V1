@@ -8,7 +8,7 @@ import { navConfig, NavItem } from './navConfig'
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { isCollapsed, toggleCollapse, setPage } = useNavStore()
+  const { isCollapsed, toggleCollapse, toggleSidebar, closeSidebar, setPage, isSidebarOpen } = useNavStore()
 
   const activePage = navConfig.find((item) => item.href === pathname)?.id ?? ''
 
@@ -24,33 +24,51 @@ export function Sidebar() {
   )
 
   return (
-    <aside
-      className={`
-        fixed left-0 top-0 h-screen bg-surface-secondary border-r border-surface-tertiary
-        transition-all duration-300 ease-in-out z-40
-        ${isCollapsed ? 'w-16' : 'w-52'}
-      `}
-      style={{
-        borderColor: tokens.colors.surfaceVariant.border,
-        backgroundColor: tokens.colors.surface.variant,
-      }}
-    >
-      {/* Header & Collapse Button */}
-      <div className="p-4 border-b border-surface-tertiary flex justify-between items-center">
-        {!isCollapsed && (
-          <h1 className="font-bold text-lg" style={{ color: tokens.colors.primary[600] }}>
-            Q
-          </h1>
-        )}
-        <button
-          onClick={toggleCollapse}
-          className="p-1.5 hover:bg-surface-tertiary rounded transition-colors"
-          title={isCollapsed ? 'Expand' : 'Collapse'}
-          aria-label="Toggle sidebar"
-        >
-          <i className={`lni ${isCollapsed ? 'lni-chevron-right' : 'lni-chevron-left'} w-5 h-5`}></i>
-        </button>
-      </div>
+    <>
+      <div
+        className={`${isSidebarOpen ? 'block' : 'hidden'} fixed inset-0 bg-black/40 z-30 lg:hidden`}
+        onClick={closeSidebar}
+      />
+      <aside
+        className={
+          `
+        fixed inset-y-0 left-0 z-40 h-screen bg-surface-secondary border-r border-surface-tertiary
+        transform transition-transform duration-300 ease-in-out
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
+        ${isCollapsed ? 'lg:w-16' : 'lg:w-52'} w-72
+      `
+        }
+        style={{
+          borderColor: tokens.colors.surfaceVariant.border,
+          backgroundColor: tokens.colors.surface.variant,
+        }}
+      >
+        {/* Header & Collapse Button */}
+        <div className="p-4 border-b border-surface-tertiary flex justify-between items-center">
+          {!isCollapsed && (
+            <h1 className="font-bold text-lg" style={{ color: tokens.colors.primary[600] }}>
+              Q
+            </h1>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleCollapse}
+              className="p-1.5 hover:bg-surface-tertiary rounded transition-colors"
+              title={isCollapsed ? 'Expand' : 'Collapse'}
+              aria-label="Toggle sidebar"
+            >
+              <i className={`lni ${isCollapsed ? 'lni-chevron-right' : 'lni-chevron-left'} w-5 h-5`}></i>
+            </button>
+            <button
+              onClick={closeSidebar}
+              className="p-1.5 hover:bg-surface-tertiary rounded transition-colors lg:hidden"
+              title="Close sidebar"
+              aria-label="Close sidebar"
+            >
+              <i className="lni lni-cross w-5 h-5"></i>
+            </button>
+          </div>
+        </div>
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-4">
@@ -115,5 +133,6 @@ export function Sidebar() {
         ))}
       </nav>
     </aside>
+    </>
   )
 }
