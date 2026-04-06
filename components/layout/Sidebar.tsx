@@ -8,7 +8,7 @@ import { navConfig, NavItem } from './navConfig'
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { isCollapsed, toggleCollapse, toggleSidebar, closeSidebar, setPage, isSidebarOpen } = useNavStore()
+  const { isCollapsed, toggleCollapse, closeSidebar, setPage, isSidebarOpen } = useNavStore()
 
   const activePage = navConfig.find((item) => item.href === pathname)?.id ?? ''
 

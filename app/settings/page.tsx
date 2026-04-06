@@ -33,7 +33,7 @@ export default function SettingsPage() {
   });
   
   // Account state
-  const [accountLevel, setAccountLevel] = useState('Free');
+  const [accountLevel] = useState('Free');
 
   const handleSave = async (provider: string) => {
     const key = tempKeys[provider];
@@ -93,7 +93,7 @@ export default function SettingsPage() {
   const handleLogout = () => {
     if (confirm('Are you sure you want to logout?')) {
       // Clear session/auth and API connections
-      tickPipeline.disconnectAll?.();
+      tickPipeline.shutdown();
       logout();
       router.push('/auth/login');
     }
